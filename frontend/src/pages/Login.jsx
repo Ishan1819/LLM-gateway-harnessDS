@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useSession } from '../App'
 import { ErrorNote } from '../components/Primitives'
 import { api } from '../services/api'
-import { PLAN_META, PLAN_ORDER } from '../lib/plans'
+import { PLAN_META, PLAN_ORDER, formatPrice } from '../lib/plans'
 
 const SELF_SERVE_PLAN = 'free'
 
@@ -166,7 +166,7 @@ export default function Login() {
                                 {meta.name}
                               </span>
                               <span className="num shrink-0 text-xs text-ink-muted">
-                                {meta.price === 0 ? 'Free' : `$${meta.price}/mo`}
+                                {formatPrice(meta.price)}
                               </span>
                             </span>
                             <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">

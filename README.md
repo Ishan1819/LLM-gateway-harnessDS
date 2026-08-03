@@ -32,7 +32,7 @@ today. This product adds the tracking and control layer on top.
 Three tiers, defined once in `backend/app/utils/plans.py` and presented on their
 own **Plans & pricing** page in the dashboard.
 
-| | Free | Standard — $49/mo | Premium — $199/mo |
+| | Free | Standard — $ /month | Premium — $ /month |
 |---|---|---|---|
 | Tracked developers | 5 | 50 | Unlimited |
 | Usage history | 7 days | 90 days | Unlimited |

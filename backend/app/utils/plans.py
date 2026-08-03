@@ -39,7 +39,9 @@ PLANS: dict[str, dict] = {
     STANDARD: {
         "id": STANDARD,
         "name": "Standard",
-        "price_monthly": 49,
+        # Pricing not finalized — None renders as "$ /month" rather than a
+        # placeholder figure. Set an int once pricing is decided.
+        "price_monthly": None,
         "tagline": "Control it, team by team.",
         "max_users": 50,
         "history_days": 90,
@@ -56,7 +58,7 @@ PLANS: dict[str, dict] = {
     PREMIUM: {
         "id": PREMIUM,
         "name": "Premium",
-        "price_monthly": 199,
+        "price_monthly": None,
         "tagline": "Spend less for the same work.",
         "max_users": 0,  # 0 = unlimited
         "history_days": 0,  # 0 = unlimited

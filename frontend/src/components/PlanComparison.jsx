@@ -1,4 +1,4 @@
-import { COMPARISON, PLAN_META, PLAN_ORDER } from '../lib/plans'
+import { COMPARISON, PLAN_META, PLAN_ORDER, formatPrice } from '../lib/plans'
 
 function Tick({ value }) {
   if (value === true) {
@@ -36,7 +36,7 @@ export default function PlanComparison({ currentPlan }) {
                       {meta.name}
                     </span>
                     <span className="text-[10px] font-normal normal-case tracking-normal text-ink-muted">
-                      {meta.price === 0 ? 'Free' : `$${meta.price}/mo`}
+                      {formatPrice(meta.price)}
                     </span>
                     {isCurrent && (
                       <span className="rounded-full bg-white/[0.08] px-1.5 text-[9px] font-medium normal-case tracking-normal text-ink-secondary">

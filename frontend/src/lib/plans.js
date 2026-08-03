@@ -8,10 +8,19 @@
 
 export const PLAN_ORDER = ['free', 'standard', 'premium']
 
+// price: null means pricing isn't finalized yet — rendered as "$ /month"
+// rather than a placeholder figure. Free is the only plan with a real price.
 export const PLAN_META = {
   free: { name: 'Free', price: 0, accent: '#94a3b8', tagline: 'See where the money goes.' },
-  standard: { name: 'Standard', price: 49, accent: '#3b82f6', tagline: 'Control it, team by team.' },
-  premium: { name: 'Premium', price: 199, accent: '#8b5cf6', tagline: 'Spend less for the same work.' },
+  standard: { name: 'Standard', price: null, accent: '#3b82f6', tagline: 'Control it, team by team.' },
+  premium: { name: 'Premium', price: null, accent: '#8b5cf6', tagline: 'Spend less for the same work.' },
+}
+
+/** "Free", "$49/mo", or "$ /month" when pricing isn't set yet. */
+export function formatPrice(price) {
+  if (price === 0) return 'Free'
+  if (price == null) return '$ /month'
+  return `$${price}/mo`
 }
 
 /** Comparison matrix rendered on the Plans & pricing page. */

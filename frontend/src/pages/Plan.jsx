@@ -3,7 +3,7 @@ import PlanComparison from '../components/PlanComparison'
 import useApi from '../hooks/useApi'
 import { useSession } from '../App'
 import { api } from '../services/api'
-import { PLAN_META, PLAN_ORDER } from '../lib/plans'
+import { PLAN_META, PLAN_ORDER, formatPrice } from '../lib/plans'
 
 function PlanCard({ plan, current }) {
   const meta = PLAN_META[plan.id]
@@ -29,10 +29,7 @@ function PlanCard({ plan, current }) {
       </div>
 
       <p className="mt-4 text-[26px] font-semibold leading-none text-ink">
-        {plan.price_monthly === 0 ? 'Free' : `$${plan.price_monthly}`}
-        {plan.price_monthly > 0 && (
-          <span className="ml-1 text-xs font-normal text-ink-muted">/month</span>
-        )}
+        {formatPrice(plan.price_monthly)}
       </p>
 
       <ul className="mt-5 flex-1 space-y-2">
