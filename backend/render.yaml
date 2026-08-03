@@ -1,0 +1,48 @@
+services:
+  - type: web
+    name: ai-cost-governor-api
+    runtime: python
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+
+      # Wired automatically from the database below.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-cost-governor-db
+          property: connectionString
+
+      # Generated once by Render and kept stable across deploys.
+      - key: JWT_SECRET
+        generateValue: true
+
+      # Fernet key for encrypting client API keys. Must be a 44-char urlsafe
+      # base64 key — generate locally and paste it in:
+      #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+      # Changing it makes previously stored provider keys unreadable.
+      - key: ENCRYPTION_KEY
+        sync: false
+
+      # Upstash Redis connection string (optional — rate limiting is skipped
+      # when unset). Format: rediss://default:<password>@<host>:<port>
+      - key: REDIS_URL
+        sync: false
+
+      # Comma-separated allowed origins. Add your Vercel production domain.
+      - key: CORS_ORIGINS
+        sync: false
+
+      - key: ENVIRONMENT
+        value: production
+
+databases:
+  - name: ai-cost-governor-db
+    plan: free
+    region: oregon
+    databaseName: ai_cost_governor

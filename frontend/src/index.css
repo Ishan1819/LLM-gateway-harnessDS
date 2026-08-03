@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-page text-ink font-sans antialiased;
+  }
+
+  /* Recharts injects focus outlines on wrappers; keep them off the surfaces. */
+  .recharts-wrapper:focus,
+  .recharts-surface:focus {
+    outline: none;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-card rounded-card border border-white/[0.06] shadow-card;
+  }
+
+  .card-title {
+    @apply text-sm font-semibold text-ink;
+  }
+
+  .card-subtitle {
+    @apply text-xs text-ink-muted mt-0.5;
+  }
+
+  .label {
+    @apply block text-xs font-medium text-ink-secondary mb-1.5;
+  }
+
+  .input {
+    @apply w-full bg-page border border-hairline rounded-lg px-3 py-2 text-sm text-ink
+           placeholder:text-ink-muted/70 focus:outline-none focus:ring-2 focus:ring-s1/60
+           focus:border-transparent transition;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm
+           font-medium transition focus:outline-none focus:ring-2 focus:ring-offset-2
+           focus:ring-offset-page disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn bg-s1 text-white hover:bg-s1/90 focus:ring-s1/60;
+  }
+
+  .btn-ghost {
+    @apply btn bg-raised text-ink-secondary hover:text-ink hover:bg-hairline
+           focus:ring-hairline;
+  }
+
+  .th {
+    @apply text-left text-[11px] font-semibold uppercase tracking-wider text-ink-muted
+           px-4 py-3 whitespace-nowrap;
+  }
+
+  .td {
+    @apply px-4 py-3 text-sm text-ink-secondary whitespace-nowrap;
+  }
+
+  /* Columns of figures align; standalone display numbers stay proportional. */
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+}
