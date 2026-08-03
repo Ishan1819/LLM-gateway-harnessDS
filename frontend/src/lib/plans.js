@@ -1,7 +1,9 @@
 /**
- * Plan metadata for the UI. The backend is the source of truth for what a plan
- * unlocks (it serves `features` on the session), so this file only carries
- * presentation concerns: ordering, accent colour, and marketing copy.
+ * Plan metadata for the Plans & pricing page.
+ *
+ * Plans are presentational: they describe what each tier includes so a buyer
+ * can compare them. They do not gate anything — every page of the product is
+ * reachable regardless of tier.
  */
 
 export const PLAN_ORDER = ['free', 'standard', 'premium']
@@ -12,48 +14,7 @@ export const PLAN_META = {
   premium: { name: 'Premium', price: 199, accent: '#8b5cf6', tagline: 'Spend less for the same work.' },
 }
 
-/** Feature keys — must match app/utils/plans.py. */
-export const FEATURES = {
-  DASHBOARD: 'dashboard',
-  USER_CAPS: 'user_caps',
-  TEAM_CAPS: 'team_caps',
-  ALERTS: 'alerts',
-  SAVINGS: 'savings',
-  OPTIMIZER: 'optimizer',
-  CUSTOM_PRICING: 'custom_pricing',
-}
-
-export const FEATURE_LABELS = {
-  [FEATURES.DASHBOARD]: 'Usage dashboard',
-  [FEATURES.USER_CAPS]: 'Per-user caps',
-  [FEATURES.TEAM_CAPS]: 'Team caps',
-  [FEATURES.ALERTS]: 'Budget alerts',
-  [FEATURES.SAVINGS]: 'Savings report',
-  [FEATURES.OPTIMIZER]: 'Cost Optimizer',
-  [FEATURES.CUSTOM_PRICING]: 'Custom pricing table',
-}
-
-/** Cheapest plan that includes a feature — drives "available on X" copy. */
-export function requiredPlanFor(feature) {
-  const membership = {
-    free: [FEATURES.DASHBOARD, FEATURES.USER_CAPS],
-    standard: [
-      FEATURES.DASHBOARD,
-      FEATURES.USER_CAPS,
-      FEATURES.TEAM_CAPS,
-      FEATURES.ALERTS,
-      FEATURES.SAVINGS,
-    ],
-    premium: Object.values(FEATURES),
-  }
-  return PLAN_ORDER.find((plan) => membership[plan].includes(feature)) || 'premium'
-}
-
-export function hasFeature(organization, feature) {
-  return (organization?.features || []).includes(feature)
-}
-
-/** Comparison matrix rendered on upgrade screens and in Settings. */
+/** Comparison matrix rendered on the Plans & pricing page. */
 export const COMPARISON = [
   { label: 'Tracked developers', free: 'Up to 5', standard: 'Up to 50', premium: 'Unlimited' },
   { label: 'Usage history', free: '7 days', standard: '90 days', premium: 'Unlimited' },

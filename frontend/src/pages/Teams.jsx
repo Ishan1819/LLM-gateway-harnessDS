@@ -1,22 +1,14 @@
 import { useState } from 'react'
 
 import { Card, ErrorNote, PageHeader, Spinner } from '../components/Primitives'
-import PlanGate from '../components/PlanGate'
 import { TeamSpendChart, TeamTable } from '../components/TeamBreakdown'
 import CapEditor from '../components/CapEditor'
 import useApi from '../hooks/useApi'
-import { useSession } from '../App'
 import { api } from '../services/api'
-import { FEATURES, hasFeature } from '../lib/plans'
 import { currency } from '../lib/format'
 
 export default function Teams() {
-  const { organization } = useSession()
-  const allowed = hasFeature(organization, FEATURES.TEAM_CAPS)
-  const { data: teams, error, loading, reload } = useApi(
-    () => (allowed ? api.teams() : Promise.resolve([])),
-    [allowed],
-  )
+  const { data: teams, error, loading, reload } = useApi(() => api.teams(), [])
   const [editing, setEditing] = useState(null)
   const [creating, setCreating] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -55,21 +47,6 @@ export default function Teams() {
     } finally {
       setSaving(false)
     }
-  }
-
-  if (!allowed) {
-    return (
-      <PlanGate
-        feature={FEATURES.TEAM_CAPS}
-        currentPlan={organization?.plan}
-        description="Group developers into teams and give each one its own budget, so a single team can't quietly consume the whole org's spend."
-        bullets={[
-          'Daily and monthly caps at the team level, enforced before requests leave',
-          'Spend-per-team breakdown with pace against cap',
-          'Bulk cap management across a whole team at once',
-        ]}
-      />
-    )
   }
 
   if (loading) return <Spinner label="Loading teams" />

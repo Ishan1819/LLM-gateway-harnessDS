@@ -29,8 +29,8 @@ today. This product adds the tracking and control layer on top.
 
 ## Plans
 
-Three tiers, defined once in `backend/app/utils/plans.py` and enforced by the
-API — not just hidden in the UI.
+Three tiers, defined once in `backend/app/utils/plans.py` and presented on their
+own **Plans & pricing** page in the dashboard.
 
 | | Free | Standard — $49/mo | Premium — $199/mo |
 |---|---|---|---|
@@ -44,17 +44,13 @@ API — not just hidden in the UI.
 | **Cost Optimizer** | — | — | ✓ |
 | Editable pricing table | — | — | ✓ |
 
-**Enforcement is server-side.** A gated endpoint returns `402 Payment Required`
-with the tier that would unlock it, so the dashboard can render a specific
-upgrade prompt. Locked pages stay visible and explain the feature rather than
-disappearing — the lock doubles as the pitch.
+**Plans are descriptive, not restrictive.** Every page of the product works on
+every tier — the table above is what a buyer compares, shown on its own
+**Plans & pricing** page. Nothing is locked or hidden behind an upgrade
+prompt, and no endpoint checks the tier. Self-serve signup provisions Free;
+paid tiers are sales-assisted. The seeded demo org is labelled Premium.
 
-**Self-serve signup is Free-only.** Requesting a paid tier at registration is
-rejected by the API; paid plans are sales-assisted. The seeded demo org runs on
-**Premium** so the whole product is visible in a walkthrough — flip
-`plan=plans.PREMIUM` in `seed_data.py` to demo the gates instead.
-
-### The Cost Optimizer (Premium)
+### The Cost Optimizer
 
 The one feature that pays for itself. It reads usage the proxy already recorded
 — never prompt bodies — and reports, in dollars:

@@ -10,15 +10,12 @@ import {
 } from 'recharts'
 
 import { CHART, Legend, TooltipShell, axisTick } from '../components/ChartKit'
-import PlanGate from '../components/PlanGate'
 import { Card, ErrorNote, PageHeader, Spinner } from '../components/Primitives'
 import StatsCard from '../components/StatsCard'
 import UsageChart from '../components/UsageChart'
 import { TeamTable } from '../components/TeamBreakdown'
 import useApi from '../hooks/useApi'
-import { useSession } from '../App'
 import { api } from '../services/api'
-import { FEATURES, hasFeature } from '../lib/plans'
 import { OTHER, compactNumber, currency, seriesColor } from '../lib/format'
 
 /**
@@ -124,29 +121,7 @@ function ModelChart({ models = [], height = 280 }) {
 }
 
 export default function Savings() {
-  const { organization } = useSession()
-  const allowed = hasFeature(organization, FEATURES.SAVINGS)
-
-  const { data, error, loading, reload } = useApi(
-    () => (allowed ? api.savings() : Promise.resolve(null)),
-    [allowed],
-  )
-
-  if (!allowed) {
-    return (
-      <PlanGate
-        feature={FEATURES.SAVINGS}
-        currentPlan={organization?.plan}
-        description="Know where the month lands before it does — and which accounts are pulling it there."
-        bullets={[
-          'Month-end spend projection against your budget',
-          'Like-for-like month-over-month comparison',
-          'Spend broken down by model, with the expensive tail called out',
-          'Accounts flagged for review when spend runs well above the team median',
-        ]}
-      />
-    )
-  }
+  const { data, error, loading, reload } = useApi(() => api.savings(), [])
 
   if (loading) return <Spinner label="Building savings report" />
   if (error) return <ErrorNote message={error} onRetry={reload} />

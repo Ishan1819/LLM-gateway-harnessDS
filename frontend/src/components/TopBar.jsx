@@ -86,7 +86,7 @@ export default function TopBar({ organization, admin, onSignOut }) {
                 className="block px-4 py-2.5 text-sm text-ink-secondary transition-colors hover:bg-white/[0.04] hover:text-ink"
                 role="menuitem"
               >
-                Plan &amp; billing
+                Plans &amp; pricing
               </Link>
               <button
                 onClick={onSignOut}

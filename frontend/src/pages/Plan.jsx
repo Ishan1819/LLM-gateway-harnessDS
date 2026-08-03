@@ -1,5 +1,5 @@
 import { Card, ErrorNote, PageHeader, Spinner } from '../components/Primitives'
-import { PlanComparison } from '../components/PlanGate'
+import PlanComparison from '../components/PlanComparison'
 import useApi from '../hooks/useApi'
 import { useSession } from '../App'
 import { api } from '../services/api'
@@ -65,26 +65,13 @@ export default function Plan() {
   if (!data) return null
 
   const current = data.current.id
-  const { usage } = data
 
   return (
     <>
       <PageHeader
-        title="Plan & billing"
-        subtitle={`${organization?.name} is on the ${data.current.name} plan`}
+        title="Plans & pricing"
+        subtitle={`${organization?.name} is on the ${data.current.name} plan · ${data.usage.users} developers tracked`}
       />
-
-      {usage.at_user_limit && (
-        <div className="mb-4 rounded-card border border-warning/30 bg-warning/[0.07] px-5 py-4">
-          <p className="text-sm font-medium text-warning">
-            <span aria-hidden="true" className="mr-2">▲</span>
-            You've reached the user limit on {data.current.name}
-          </p>
-          <p className="mt-1.5 text-sm text-ink-secondary">
-            {usage.users} of {usage.max_users} tracked developers in use. Upgrade to add more.
-          </p>
-        </div>
-      )}
 
       <div className="grid gap-4 lg:grid-cols-3 items-stretch">
         {PLAN_ORDER.map((id) => {

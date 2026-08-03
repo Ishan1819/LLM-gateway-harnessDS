@@ -19,7 +19,7 @@ from app.schemas import (
     UserCreate,
     UserOut,
 )
-from app.services import optimizer_service, plan_service, usage_service
+from app.services import optimizer_service, usage_service
 from app.services.auth_service import get_current_admin
 from app.utils import plans
 
@@ -129,11 +129,6 @@ def create_user(
     ).scalar_one_or_none()
     if existing:
         raise HTTPException(status.HTTP_409_CONFLICT, "That user already exists.")
-
-    current_count = len(
-        db.execute(select(User).where(User.org_id == admin.org_id)).scalars().all()
-    )
-    plan_service.enforce_user_limit(db, admin.org_id, current_count)
 
     if body.team_id is not None:
         team = db.execute(
@@ -261,7 +256,7 @@ def update_user_caps(
 def update_team_caps(
     team_id: int,
     body: CapUpdate,
-    admin: AdminUser = Depends(plan_service.require_feature(plans.F_TEAM_CAPS)),
+    admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     team = db.execute(
@@ -285,7 +280,7 @@ def update_team_caps(
 @router.get("/alerts", response_model=list[AlertOut])
 def list_alerts(
     limit: int = Query(100, le=500),
-    admin: AdminUser = Depends(plan_service.require_feature(plans.F_ALERTS)),
+    admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     return (
@@ -323,10 +318,10 @@ def mark_alert_read(
 @router.get("/optimizer")
 def optimizer(
     days: int = Query(30, ge=1, le=365),
-    admin: AdminUser = Depends(plan_service.require_feature(plans.F_OPTIMIZER)),
+    admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
-    window = plan_service.history_window(db, admin.org_id, days)
+    window = days
     since = usage_service.day_start() - timedelta(days=window - 1)
     return optimizer_service.build_report(db, admin.org_id, since)
 
@@ -335,20 +330,19 @@ def optimizer(
 def current_plan(
     admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)
 ):
-    """Current tier plus the full catalogue, for the in-app upgrade screens."""
+    """Current tier plus the full catalogue, for the Plans & pricing page.
+
+    Informational only — plans describe what a tier includes, they do not gate
+    any endpoint. Every feature of the product stays reachable.
+    """
     org: Organization = db.get(Organization, admin.org_id)
-    plan = plans.get_plan(org.plan)
     user_count = len(
         db.execute(select(User).where(User.org_id == org.id)).scalars().all()
     )
     return {
-        "current": plan,
+        "current": plans.get_plan(org.plan),
         "plans": plans.public_plans(),
-        "usage": {
-            "users": user_count,
-            "max_users": plan["max_users"],
-            "at_user_limit": bool(plan["max_users"] and user_count >= plan["max_users"]),
-        },
+        "usage": {"users": user_count},
     }
 
 
@@ -357,7 +351,7 @@ def current_plan(
 # --------------------------------------------------------------------------
 @router.get("/savings")
 def savings(
-    admin: AdminUser = Depends(plan_service.require_feature(plans.F_SAVINGS)),
+    admin: AdminUser = Depends(get_current_admin),
     db: Session = Depends(get_db),
 ):
     org: Organization = db.get(Organization, admin.org_id)

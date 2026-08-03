@@ -1,36 +1,11 @@
 import { Card, ErrorNote, PageHeader, Spinner } from '../components/Primitives'
-import PlanGate from '../components/PlanGate'
 import StatsCard from '../components/StatsCard'
 import useApi from '../hooks/useApi'
-import { useSession } from '../App'
 import { api } from '../services/api'
-import { FEATURES, hasFeature } from '../lib/plans'
 import { compactNumber, currency, percent } from '../lib/format'
 
-const GATE_COPY = {
-  description:
-    'Finds spend you can remove without changing what your team ships — by ' +
-    'right-sizing models per workload and catching prompts that run over and over.',
-  bullets: [
-    'Estimates savings from moving simpler requests to a cheaper model, in dollars',
-    'Detects retry loops and duplicate prompts, per developer',
-    'Per-team prompt efficiency guidance based on your real traffic',
-    'Runs entirely on usage already recorded — no prompt bodies are read',
-  ],
-}
-
 export default function Optimizer() {
-  const { organization } = useSession()
-  const allowed = hasFeature(organization, FEATURES.OPTIMIZER)
-
-  const { data, error, loading, reload } = useApi(
-    () => (allowed ? api.optimizer(30) : Promise.resolve(null)),
-    [allowed],
-  )
-
-  if (!allowed) {
-    return <PlanGate feature={FEATURES.OPTIMIZER} currentPlan={organization?.plan} {...GATE_COPY} />
-  }
+  const { data, error, loading, reload } = useApi(() => api.optimizer(30), [])
 
   if (loading) return <Spinner label="Analysing usage" />
   if (error) return <ErrorNote message={error} onRetry={reload} />

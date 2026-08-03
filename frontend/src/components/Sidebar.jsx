@@ -1,15 +1,16 @@
 import { NavLink } from 'react-router-dom'
 
-import { FEATURES, PLAN_META, hasFeature, requiredPlanFor } from '../lib/plans'
-
+// Every page is reachable on every plan. Plans are described on their own
+// page rather than used to lock functionality away.
 const NAV = [
   { to: '/', label: 'Overview', end: true, glyph: '◈' },
-  { to: '/teams', label: 'Teams', glyph: '▣', feature: FEATURES.TEAM_CAPS },
+  { to: '/teams', label: 'Teams', glyph: '▣' },
   { to: '/users', label: 'Users', glyph: '◍' },
   { to: '/caps', label: 'Cap management', glyph: '⊟' },
-  { to: '/alerts', label: 'Alerts', glyph: '△', feature: FEATURES.ALERTS },
-  { to: '/savings', label: 'Savings report', glyph: '◑', feature: FEATURES.SAVINGS },
-  { to: '/optimizer', label: 'Cost Optimizer', glyph: '◆', feature: FEATURES.OPTIMIZER },
+  { to: '/alerts', label: 'Alerts', glyph: '△' },
+  { to: '/savings', label: 'Savings report', glyph: '◑' },
+  { to: '/optimizer', label: 'Cost Optimizer', glyph: '◆' },
+  { to: '/plan', label: 'Plans & pricing', glyph: '◇' },
   { to: '/settings', label: 'Settings', glyph: '⚙' },
 ]
 
@@ -43,57 +44,38 @@ export default function Sidebar({ organization, admin, unreadAlerts = 0, onSignO
       <Logo />
 
       <nav className="flex-1 px-3 py-4 space-y-0.5">
-        {NAV.map((item) => {
-          // Locked items stay visible and clickable — the page itself explains
-          // what the feature does, so the lock doubles as the pitch.
-          const locked = item.feature && !hasFeature(organization, item.feature)
-          const lockAccent = locked ? PLAN_META[requiredPlanFor(item.feature)].accent : null
-
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) =>
-                [
-                  'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
-                  isActive
-                    ? 'bg-s1/12 text-ink font-medium'
-                    : 'text-ink-secondary hover:bg-white/[0.04] hover:text-ink',
-                ].join(' ')
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span
-                    aria-hidden="true"
-                    className={`text-xs ${isActive ? 'text-s1' : 'text-ink-muted'}`}
-                  >
-                    {item.glyph}
+        {NAV.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) =>
+              [
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                isActive
+                  ? 'bg-s1/12 text-ink font-medium'
+                  : 'text-ink-secondary hover:bg-white/[0.04] hover:text-ink',
+              ].join(' ')
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span
+                  aria-hidden="true"
+                  className={`text-xs ${isActive ? 'text-s1' : 'text-ink-muted'}`}
+                >
+                  {item.glyph}
+                </span>
+                {item.label}
+                {item.to === '/alerts' && unreadAlerts > 0 && (
+                  <span className="ml-auto rounded-full bg-critical/20 px-1.5 py-0.5 text-[10px] font-semibold text-critical num">
+                    {unreadAlerts}
                   </span>
-                  <span className={locked ? 'text-ink-muted' : undefined}>{item.label}</span>
-
-                  {locked && (
-                    <span
-                      className="ml-auto text-[9px]"
-                      style={{ color: lockAccent }}
-                      title={`Available on ${PLAN_META[requiredPlanFor(item.feature)].name}`}
-                      aria-label={`Requires ${PLAN_META[requiredPlanFor(item.feature)].name} plan`}
-                    >
-                      ◆
-                    </span>
-                  )}
-
-                  {!locked && item.to === '/alerts' && unreadAlerts > 0 && (
-                    <span className="ml-auto rounded-full bg-critical/20 px-1.5 py-0.5 text-[10px] font-semibold text-critical num">
-                      {unreadAlerts}
-                    </span>
-                  )}
-                </>
-              )}
-            </NavLink>
-          )
-        })}
+                )}
+              </>
+            )}
+          </NavLink>
+        ))}
       </nav>
 
       <div className="border-t border-hairline/70 p-3">
