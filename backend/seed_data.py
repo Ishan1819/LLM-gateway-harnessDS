@@ -382,6 +382,32 @@ def seed() -> None:
         db.close()
 
 
+def demo_org_exists() -> bool:
+    db = SessionLocal()
+    try:
+        return (
+            db.execute(
+                select(Organization).where(Organization.slug == ORG_SLUG)
+            ).scalar_one_or_none()
+            is not None
+        )
+    finally:
+        db.close()
+
+
+def seed_if_missing() -> None:
+    """Idempotent entry point safe to call from app startup.
+
+    Never wipes existing data — only seeds when the demo org doesn't exist yet,
+    so repeated calls (e.g. every cold start on a free-tier host) are harmless.
+    """
+    init_db()
+    if demo_org_exists():
+        print("Demo org already present; skipping seed.")
+        return
+    seed()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Seed the AI Cost Governor demo data.")
     parser.add_argument(
@@ -390,13 +416,7 @@ def main() -> int:
     args = parser.parse_args()
 
     init_db()
-    db = SessionLocal()
-    try:
-        exists = db.execute(
-            select(Organization).where(Organization.slug == ORG_SLUG)
-        ).scalar_one_or_none()
-    finally:
-        db.close()
+    exists = demo_org_exists()
 
     if exists and args.keep:
         print("Demo org already present; nothing to do.")

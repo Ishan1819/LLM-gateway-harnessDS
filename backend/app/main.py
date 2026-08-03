@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -19,6 +20,17 @@ logging.basicConfig(level=logging.INFO)
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     init_db()
+    # Opt-in, idempotent demo seeding — set SEED_DEMO_ON_STARTUP=true in the
+    # host's env vars once, let it deploy, then unset it. Safe to leave on:
+    # seed_if_missing() only ever seeds when the demo org doesn't exist yet,
+    # it never wipes data on a later cold start.
+    if os.environ.get("SEED_DEMO_ON_STARTUP", "").lower() == "true":
+        try:
+            from seed_data import seed_if_missing
+
+            seed_if_missing()
+        except Exception:
+            logging.getLogger(__name__).exception("Demo seed on startup failed")
     yield
 
 
