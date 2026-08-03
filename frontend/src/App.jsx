@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 
 import Sidebar from './components/Sidebar'
+import TopBar from './components/TopBar'
 import { Spinner } from './components/Primitives'
 import { api, auth } from './services/api'
 
@@ -9,6 +10,8 @@ import Alerts from './pages/Alerts'
 import Caps from './pages/Caps'
 import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
+import Optimizer from './pages/Optimizer'
+import Plan from './pages/Plan'
 import Savings from './pages/Savings'
 import Settings from './pages/Settings'
 import Teams from './pages/Teams'
@@ -80,6 +83,11 @@ export default function App() {
           onSignOut={signOut}
         />
         <main className="flex-1 min-w-0 overflow-x-hidden">
+          <TopBar
+            organization={session.organization}
+            admin={session.admin}
+            onSignOut={signOut}
+          />
           <div className="mx-auto max-w-[1400px] px-8 py-8">
             <Routes>
               <Route path="/" element={<Dashboard />} />
@@ -88,6 +96,8 @@ export default function App() {
               <Route path="/caps" element={<Caps />} />
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/savings" element={<Savings />} />
+              <Route path="/optimizer" element={<Optimizer />} />
+              <Route path="/plan" element={<Plan />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/login" element={<Navigate to="/" replace />} />
               <Route path="*" element={<Navigate to="/" replace />} />

@@ -15,6 +15,8 @@ class RegisterRequest(BaseModel):
     admin_email: EmailStr
     password: str = Field(min_length=8, max_length=128)
     monthly_budget: float = Field(default=0.0, ge=0)
+    # Self-serve signup is Free-only; paid tiers go through sales.
+    plan: str = Field(default="free", pattern=r"^(free|standard|premium)$")
 
 
 class LoginRequest(BaseModel):
@@ -46,6 +48,11 @@ class OrganizationOut(BaseModel):
     proxy_base_url: str | None = None
     has_openai_key: bool = False
     has_anthropic_key: bool = False
+    plan: str = "free"
+    plan_name: str = "Free"
+    features: list[str] = []
+    max_users: int = 0
+    history_days: int = 0
 
     class Config:
         from_attributes = True

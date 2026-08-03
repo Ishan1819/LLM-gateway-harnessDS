@@ -3,7 +3,7 @@
     python seed_data.py            # wipe + reseed
     python seed_data.py --keep     # only seed if the demo org is missing
 
-Demo login: admin@techcorp.com / demo123
+Demo login: admin@test.com / demo123
 
 Caps are derived from each user's generated month-end run rate rather than
 hardcoded, so the demo shows meaningful utilization no matter which day of the
@@ -26,29 +26,76 @@ from app.models import Alert, AlertType, Organization, Team, UsageLog, User
 from app.models.user import AdminUser, generate_proxy_api_key
 from app.services.auth_service import hash_password
 from app.services.usage_service import month_start
+from app.utils import plans
 from app.utils.pricing import calculate_cost
 
 random.seed(7)  # reproducible demos
 
-ORG_SLUG = "techcorp"
+ORG_SLUG = "demo"
 DAYS = 30
 
-PROMPTS = [
-    "Refactor this service to use async database sessions",
-    "Write unit tests for the payment reconciliation module",
-    "Summarize the findings in this quarterly churn dataset",
-    "Explain why this migration is locking the users table",
-    "Generate TypeScript types from this OpenAPI schema",
-    "Draft release notes for version 2.4",
-    "Review this PR for security issues",
-    "Convert this pandas pipeline to Polars",
-    "What does this stack trace mean?",
-    "Build a feature importance chart for the churn model",
+# Prompt templates plus a varying subject, so healthy traffic looks like real
+# work — mostly distinct prompts. Without this variety every request would
+# collapse onto a handful of labels and the optimizer's repeat-rate metric
+# would read ~100% for everyone, flagging normal usage as waste.
+PROMPT_TEMPLATES = [
+    "Refactor {module} to use async database sessions",
+    "Write unit tests for {module}",
+    "Summarize the findings in the {quarter} {subject} dataset",
+    "Explain why the {module} migration is locking the users table",
+    "Generate TypeScript types from the {module} OpenAPI schema",
+    "Draft release notes for version {version}",
+    "Review PR #{ticket} in {module} for security issues",
+    "Convert the {module} pandas pipeline to Polars",
+    "Debug the {error} raised by {module}",
+    "Build a feature importance chart for the {subject} model",
+    "Add retry handling to the {module} client",
+    "Document the public API surface of {module}",
+    "Profile the slow query in {module} and propose an index",
+    "Port {module} from callbacks to async/await",
 ]
 
-# The repetitive prompts our worst offenders keep re-sending.
+MODULES = [
+    "the billing service", "the auth middleware", "the ingestion worker",
+    "the search indexer", "the webhook dispatcher", "the report generator",
+    "the notification queue", "the pricing engine", "the audit logger",
+    "the session store", "the export pipeline", "the rate limiter",
+]
+SUBJECTS = ["churn", "activation", "retention", "fraud", "forecast", "attribution"]
+ERRORS = [
+    "IntegrityError", "TimeoutError", "KeyError", "ConnectionReset",
+    "ValidationError", "DeadlockDetected",
+]
+QUARTERS = ["Q1", "Q2", "Q3", "Q4"]
+
+
+SOURCE_FILES = [
+    "api/routes.py", "core/session.py", "workers/consumer.py", "db/models.py",
+    "lib/client.ts", "services/dispatch.go", "utils/retry.py", "web/handlers.rs",
+]
+
+
+def realistic_prompt() -> str:
+    """A distinct prompt per call.
+
+    Genuine engineering prompts almost never repeat verbatim — they name a
+    different file, ticket, or error each time. Anchoring each one to a
+    concrete location keeps healthy traffic near-unique, so the optimizer's
+    repeat detection surfaces only the deliberate retry loops.
+    """
+    base = random.choice(PROMPT_TEMPLATES).format(
+        module=random.choice(MODULES),
+        subject=random.choice(SUBJECTS),
+        error=random.choice(ERRORS),
+        quarter=random.choice(QUARTERS),
+        version=f"{random.randint(1, 4)}.{random.randint(0, 9)}",
+        ticket=random.randint(1000, 9999),
+    )
+    return f"{base} ({random.choice(SOURCE_FILES)}:{random.randint(12, 940)})"
+
+
+# The repetitive prompts our worst offenders keep re-sending, verbatim.
 WASTEFUL_PROMPTS = [
-    "fix this",
     "fix this",
     "why doesn't this work",
     "try again",
@@ -126,7 +173,14 @@ def wipe(db) -> None:
 def seed() -> None:
     db = SessionLocal()
     try:
-        org = Organization(name="TechCorp", slug=ORG_SLUG, monthly_budget=0.0)
+        # The demo org runs on Premium so every tier's features are visible in
+        # the showcase. Self-serve signups start on Free and see the gates.
+        org = Organization(
+            name="Demo Organization",
+            slug=ORG_SLUG,
+            monthly_budget=0.0,
+            plan=plans.PREMIUM,
+        )
         db.add(org)
         db.flush()
 
@@ -134,7 +188,7 @@ def seed() -> None:
             AdminUser(
                 org_id=org.id,
                 name="Dana Whitfield",
-                email="admin@techcorp.com",
+                email="admin@test.com",
                 password_hash=hash_password("demo123"),
             )
         )
@@ -156,7 +210,7 @@ def seed() -> None:
                     org_id=org.id,
                     team_id=team.id,
                     name=full_name,
-                    email=f"{handle}@techcorp.com",
+                    email=f"{handle}@test.com",
                     role="admin" if index == 0 else "member",
                     proxy_api_key=generate_proxy_api_key(),
                     monthly_cap=0.0,
@@ -215,7 +269,7 @@ def seed() -> None:
                     )
 
                     summary = (
-                        random.choice(WASTEFUL_PROMPTS) if is_waste else random.choice(PROMPTS)
+                        random.choice(WASTEFUL_PROMPTS) if is_waste else realistic_prompt()
                     )
 
                     timestamp = day.replace(
@@ -369,7 +423,7 @@ def seed() -> None:
 
         print(f"Wrote {len(alerts)} alerts.")
         print(f"\nDemo org ready: {org.name} (slug: {org.slug})")
-        print("  Login:             admin@techcorp.com / demo123")
+        print("  Login:             admin@test.com / demo123")
         print(f"  Users:             {len(users)} across {len(TEAMS)} teams")
         print(f"  Spend (30 days):   ${total_30d:,.2f}")
         print(f"  Spend (month-to-date): ${mtd_total:,.2f} "

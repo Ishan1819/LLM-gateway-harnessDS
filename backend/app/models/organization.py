@@ -14,6 +14,9 @@ class Organization(Base):
     slug: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     monthly_budget: Mapped[float] = mapped_column(Float, default=0.0, nullable=False)
 
+    # Subscription tier — see app/utils/plans.py for what each one unlocks.
+    plan: Mapped[str] = mapped_column(String(20), default="free", nullable=False)
+
     # Client-supplied provider keys, encrypted at rest with Fernet.
     openai_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
     anthropic_api_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -3,6 +3,15 @@ import { useState } from 'react'
 import { useSession } from '../App'
 import { ErrorNote } from '../components/Primitives'
 import { api } from '../services/api'
+import { PLAN_META, PLAN_ORDER } from '../lib/plans'
+
+const SELF_SERVE_PLAN = 'free'
+
+const PLAN_SUMMARY = {
+  free: '5 developers · per-user caps · 7-day history',
+  standard: '50 developers · teams, alerts & savings report · 90-day history',
+  premium: 'Unlimited · Cost Optimizer & model right-sizing',
+}
 
 export default function Login() {
   const { signIn } = useSession()
@@ -10,14 +19,25 @@ export default function Login() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const [email, setEmail] = useState('admin@techcorp.com')
+  const [email, setEmail] = useState('admin@test.com')
   const [password, setPassword] = useState('demo123')
   const [orgName, setOrgName] = useState('')
   const [orgSlug, setOrgSlug] = useState('')
   const [adminName, setAdminName] = useState('')
+  const [plan, setPlan] = useState(SELF_SERVE_PLAN)
+
+  const paidPlanChosen = mode === 'register' && plan !== SELF_SERVE_PLAN
 
   async function submit(event) {
     event.preventDefault()
+    if (paidPlanChosen) {
+      setError(
+        `The demo is available on the Free plan only. ${PLAN_META[plan].name} is sales-assisted — ` +
+          'start on Free and upgrade from inside the dashboard.',
+      )
+      return
+    }
+
     setBusy(true)
     setError('')
     try {
@@ -31,6 +51,7 @@ export default function Login() {
               admin_email: email,
               password,
               monthly_budget: 0,
+              plan: SELF_SERVE_PLAN,
             })
       signIn(payload)
     } catch (err) {
@@ -108,6 +129,65 @@ export default function Login() {
             {mode === 'register' && (
               <>
                 <div>
+                  <span className="label">Choose a plan</span>
+                  <div className="space-y-2">
+                    {PLAN_ORDER.map((id) => {
+                      const meta = PLAN_META[id]
+                      const selected = plan === id
+                      const isFree = id === SELF_SERVE_PLAN
+                      return (
+                        <label
+                          key={id}
+                          className={[
+                            'flex cursor-pointer items-start gap-3 rounded-lg border px-3.5 py-2.5 transition-colors',
+                            selected
+                              ? 'border-transparent bg-white/[0.05] ring-1'
+                              : 'border-hairline hover:bg-white/[0.03]',
+                          ].join(' ')}
+                          style={selected ? { '--tw-ring-color': meta.accent } : undefined}
+                        >
+                          <input
+                            type="radio"
+                            name="plan"
+                            value={id}
+                            checked={selected}
+                            onChange={() => {
+                              setPlan(id)
+                              setError('')
+                            }}
+                            className="mt-1 accent-s1"
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-baseline justify-between gap-2">
+                              <span
+                                className="text-sm font-medium"
+                                style={{ color: selected ? meta.accent : undefined }}
+                              >
+                                {meta.name}
+                              </span>
+                              <span className="num shrink-0 text-xs text-ink-muted">
+                                {meta.price === 0 ? 'Free' : `$${meta.price}/mo`}
+                              </span>
+                            </span>
+                            <span className="mt-0.5 block text-[11px] leading-snug text-ink-muted">
+                              {PLAN_SUMMARY[id]}
+                            </span>
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+
+                  {paidPlanChosen && (
+                    <p className="mt-2 rounded-lg border border-warning/30 bg-warning/[0.07] px-3 py-2 text-xs text-warning">
+                      <span aria-hidden="true" className="mr-1.5">▲</span>
+                      The demo is available on the Free plan only. Pick Free to continue —
+                      you can upgrade from inside the dashboard.
+                    </p>
+                  )}
+                </div>
+
+                <div>
                   <label className="label" htmlFor="org-name">Organization name</label>
                   <input
                     id="org-name"
@@ -122,7 +202,7 @@ export default function Login() {
                           .replace(/^-+|-+$/g, ''),
                       )
                     }}
-                    placeholder="TechCorp"
+                    placeholder="Acme Inc"
                     required
                   />
                 </div>
@@ -133,7 +213,7 @@ export default function Login() {
                     className="input"
                     value={orgSlug}
                     onChange={(e) => setOrgSlug(e.target.value)}
-                    placeholder="techcorp"
+                    placeholder="acme"
                     pattern="[a-z0-9][a-z0-9-]*"
                     required
                   />
@@ -183,8 +263,16 @@ export default function Login() {
 
             <ErrorNote message={error} />
 
-            <button className="btn-primary w-full" type="submit" disabled={busy}>
-              {busy ? 'Working…' : mode === 'login' ? 'Sign in' : 'Create organization'}
+            <button
+              className="btn-primary w-full"
+              type="submit"
+              disabled={busy || paidPlanChosen}
+            >
+              {busy
+                ? 'Working…'
+                : mode === 'login'
+                  ? 'Sign in'
+                  : `Create organization on ${PLAN_META[plan].name}`}
             </button>
           </form>
 
@@ -203,7 +291,7 @@ export default function Login() {
           {mode === 'login' && (
             <div className="mt-8 rounded-lg border border-hairline bg-card/60 px-4 py-3">
               <p className="text-xs font-medium text-ink-secondary">Demo account</p>
-              <p className="mt-1 text-xs text-ink-muted num">admin@techcorp.com / demo123</p>
+              <p className="mt-1 text-xs text-ink-muted num">admin@test.com / demo123</p>
             </div>
           )}
         </div>

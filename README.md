@@ -14,6 +14,7 @@ today. This product adds the tracking and control layer on top.
 
 ## Contents
 
+- [Plans](#plans)
 - [How it works](#how-it-works)
 - [Architecture](#architecture)
 - [Local setup](#local-setup)
@@ -23,6 +24,52 @@ today. This product adds the tracking and control layer on top.
 - [Pricing table](#pricing-table)
 - [Security notes](#security-notes)
 - [Screenshots](#screenshots)
+
+---
+
+## Plans
+
+Three tiers, defined once in `backend/app/utils/plans.py` and enforced by the
+API — not just hidden in the UI.
+
+| | Free | Standard — $49/mo | Premium — $199/mo |
+|---|---|---|---|
+| Tracked developers | 5 | 50 | Unlimited |
+| Usage history | 7 days | 90 days | Unlimited |
+| Spend dashboard | ✓ | ✓ | ✓ |
+| Per-user caps | ✓ | ✓ | ✓ |
+| Teams & team caps | — | ✓ | ✓ |
+| Budget alerts (80% / 90%) | — | ✓ | ✓ |
+| Savings report & projections | — | ✓ | ✓ |
+| **Cost Optimizer** | — | — | ✓ |
+| Editable pricing table | — | — | ✓ |
+
+**Enforcement is server-side.** A gated endpoint returns `402 Payment Required`
+with the tier that would unlock it, so the dashboard can render a specific
+upgrade prompt. Locked pages stay visible and explain the feature rather than
+disappearing — the lock doubles as the pitch.
+
+**Self-serve signup is Free-only.** Requesting a paid tier at registration is
+rejected by the API; paid plans are sales-assisted. The seeded demo org runs on
+**Premium** so the whole product is visible in a walkthrough — flip
+`plan=plans.PREMIUM` in `seed_data.py` to demo the gates instead.
+
+### The Cost Optimizer (Premium)
+
+The one feature that pays for itself. It reads usage the proxy already recorded
+— never prompt bodies — and reports, in dollars:
+
+- **Model right-sizing.** For each model, the requests below *its own median*
+  context size are candidates for one tier down. Measuring against the model's
+  own usage means a team with genuinely large contexts isn't told to downgrade
+  everything.
+- **Repeated prompts.** The same prompt sent 3+ times by one person — usually a
+  retry loop. Everything after the first run is what caching could absorb.
+- **Per-team prompt efficiency.** Context size, output length and repeat rate
+  per team, each with specific guidance drawn from that team's own traffic.
+
+Findings are **estimates, presented as such** — a model downgrade only holds if
+quality holds, and the UI says so rather than implying a one-click saving.
 
 ---
 
@@ -131,12 +178,12 @@ npm run dev
 Open <http://localhost:5173> and sign in with the demo account:
 
 ```
-admin@techcorp.com / demo123
+admin@test.com / demo123
 ```
 
 ### What the seed data contains
 
-- **TechCorp** with 20 users across Backend (8), Frontend (5) and Data Science (7)
+- **Demo Organization** with 20 users across Backend (8), Frontend (5) and Data Science (7)
 - 30 days of usage — ~11,600 requests, weekday/weekend rhythm, per-team model mixes
 - Data Science on heavy GPT-4 Turbo and Claude Opus; Frontend mostly on GPT-4o-mini
 - Three users with a visible waste pattern: high volume, short repetitive prompts
@@ -161,7 +208,7 @@ tool use — is passed through untouched.
 from openai import OpenAI
 
 client = OpenAI(
-    base_url="https://your-app.onrender.com/v1/org/techcorp",
+    base_url="https://your-app.onrender.com/v1/org/demo",
     api_key="acg-…",                       # the user's proxy key
 )
 
@@ -177,7 +224,7 @@ client.chat.completions.create(
 from anthropic import Anthropic
 
 client = Anthropic(
-    base_url="https://your-app.onrender.com/v1/org/techcorp",
+    base_url="https://your-app.onrender.com/v1/org/demo",
     api_key="acg-…",
 )
 

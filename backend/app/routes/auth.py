@@ -21,6 +21,7 @@ from app.services.auth_service import (
     hash_password,
     verify_password,
 )
+from app.utils import plans
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -31,6 +32,7 @@ def proxy_base_url(request: Request, slug: str) -> str:
 
 
 def org_payload(request: Request, org: Organization) -> OrganizationOut:
+    plan = plans.get_plan(org.plan)
     return OrganizationOut(
         id=org.id,
         name=org.name,
@@ -39,6 +41,11 @@ def org_payload(request: Request, org: Organization) -> OrganizationOut:
         proxy_base_url=proxy_base_url(request, org.slug),
         has_openai_key=bool(org.openai_api_key_encrypted),
         has_anthropic_key=bool(org.anthropic_api_key_encrypted),
+        plan=plan["id"],
+        plan_name=plan["name"],
+        features=plan["features"],
+        max_users=plan["max_users"],
+        history_days=plan["history_days"],
     )
 
 
@@ -54,8 +61,20 @@ def register(body: RegisterRequest, request: Request, db: Session = Depends(get_
     ).scalar_one_or_none():
         raise HTTPException(status.HTTP_409_CONFLICT, "An account with that email already exists.")
 
+    # Self-serve signup provisions Free only. Paid tiers are sales-assisted, so
+    # a client asking for one here would otherwise grant itself a paid plan.
+    if body.plan != plans.FREE:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Self-serve signup is available on the Free plan. "
+            "Contact sales to start on Standard or Premium.",
+        )
+
     org = Organization(
-        name=body.org_name, slug=body.org_slug, monthly_budget=body.monthly_budget
+        name=body.org_name,
+        slug=body.org_slug,
+        monthly_budget=body.monthly_budget,
+        plan=plans.FREE,
     )
     db.add(org)
     db.flush()
@@ -94,6 +113,12 @@ def login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
         admin=AdminOut.model_validate(admin),
         organization=org_payload(request, org),
     )
+
+
+@router.get("/plans", tags=["auth"])
+def list_plans():
+    """Public pricing table — drives the plan picker on the signup screen."""
+    return {"plans": plans.public_plans(), "self_serve_plan": plans.FREE}
 
 
 @router.get("/me", response_model=TokenResponse)

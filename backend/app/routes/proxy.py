@@ -2,8 +2,8 @@
 
 A developer changes nothing but `base_url`:
 
-    OpenAI(base_url="https://<host>/v1/org/techcorp", api_key="<proxy key>")
-    Anthropic(base_url="https://<host>/v1/org/techcorp", api_key="<proxy key>")
+    OpenAI(base_url="https://<host>/v1/org/demo", api_key="<proxy key>")
+    Anthropic(base_url="https://<host>/v1/org/demo", api_key="<proxy key>")
 """
 
 from __future__ import annotations

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import AlertsList from '../components/AlertsList'
+import PlanGate from '../components/PlanGate'
 import { Card, ErrorNote, PageHeader, Spinner } from '../components/Primitives'
 import useApi from '../hooks/useApi'
 import { useSession } from '../App'
 import { api } from '../services/api'
+import { FEATURES, hasFeature } from '../lib/plans'
 
 const FILTERS = [
   { key: 'all', label: 'All' },
@@ -15,9 +17,14 @@ const FILTERS = [
 ]
 
 export default function Alerts() {
-  const { data: alerts, error, loading, reload, setData } = useApi(() => api.alerts(200), [])
+  const { organization, setUnreadAlerts } = useSession()
+  const allowed = hasFeature(organization, FEATURES.ALERTS)
+
+  const { data: alerts, error, loading, reload, setData } = useApi(
+    () => (allowed ? api.alerts(200) : Promise.resolve([])),
+    [allowed],
+  )
   const [filter, setFilter] = useState('all')
-  const { setUnreadAlerts } = useSession()
 
   useEffect(() => {
     if (alerts) setUnreadAlerts(alerts.filter((a) => !a.is_read).length)
@@ -37,6 +44,21 @@ export default function Alerts() {
     } catch {
       reload()
     }
+  }
+
+  if (!allowed) {
+    return (
+      <PlanGate
+        feature={FEATURES.ALERTS}
+        currentPlan={organization?.plan}
+        description="Get told the moment a developer or team crosses 80% of their budget — instead of finding out on the invoice."
+        bullets={[
+          'Automatic warnings at 80% and 90% of any cap',
+          'Limit-reached events showing exactly who was blocked and when',
+          'Filterable history across every user and team',
+        ]}
+      />
+    )
   }
 
   if (loading) return <Spinner label="Loading alerts" />

@@ -47,10 +47,17 @@ async function request(path, { method = 'GET', body, auth: withAuth = true } = {
     const message =
       typeof detail === 'string'
         ? detail
-        : detail?.error?.message ||
+        : detail?.message ||
+          detail?.error?.message ||
           (Array.isArray(detail) ? detail[0]?.msg : null) ||
           `Request failed (${response.status})`
-    throw new ApiError(message, response.status)
+    const error = new ApiError(message, response.status)
+    // 402 carries the tier that would unlock the feature, so the UI can render
+    // a specific upgrade prompt instead of a generic failure.
+    if (response.status === 402 && detail && typeof detail === 'object') {
+      error.upgrade = detail
+    }
+    throw error
   }
 
   return payload
@@ -64,8 +71,13 @@ export const api = {
     request('/api/auth/register', { method: 'POST', body: payload, auth: false }),
   me: () => request('/api/auth/me'),
 
+  // --- plans ---
+  publicPlans: () => request('/api/auth/plans', { auth: false }),
+  plan: () => request('/api/admin/plan'),
+
   // --- analytics ---
   dashboard: () => request('/api/admin/dashboard'),
+  optimizer: (days = 30) => request(`/api/admin/optimizer?days=${days}`),
   usage: (groupBy = 'user', period = 'month') =>
     request(`/api/admin/usage?group_by=${groupBy}&period=${period}`),
   savings: () => request('/api/admin/savings'),
