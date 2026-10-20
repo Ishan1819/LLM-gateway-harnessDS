@@ -1,0 +1,25 @@
+# Non-secret settings shared by gateway and workers. Host names are
+# Kubernetes Service names resolved by cluster DNS (names, not IPs).
+# Secrets (JWT_SECRET, ENCRYPTION_KEY, DATABASE_URL, POSTGRES_*) live in the
+# `acg-secrets` Secret, which scripts/deploy.ps1 builds from backend/.env.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acg-config
+  namespace: acg
+data:
+  REDIS_URL: redis://redis:6379/0
+  USAGE_MODE: stream
+  OPENAI_BASE_URL: http://mock-llm:8099/v1
+  ANTHROPIC_BASE_URL: http://mock-llm:8099/v1
+  GATEWAY_INTERNAL_URL: http://gateway:8000
+  CORS_ORIGINS: http://localhost:8080
+  UPSTREAM_RETRIES: "2"
+  RATE_LIMIT_PER_MIN: "600"
+  USAGE_STREAM: acg:usage-events
+  USAGE_GROUP: usage-workers
+  LOCK_TTL_MS: "30000"
+  LOCK_WAIT_MS: "15000"
+  LEADER_TTL_MS: "6000"
+  ALERT_SCAN_INTERVAL_S: "10"
+  HEARTBEAT_TTL_S: "10"

@@ -1,0 +1,39 @@
+# Mock LLM provider (OpenAI + Anthropic shaped). Free: no real model is called.
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-llm
+  namespace: acg
+spec:
+  selector: { app: mock-llm }
+  ports: [{ port: 8099, targetPort: 8099 }]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-llm
+  namespace: acg
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: mock-llm } }
+  template:
+    metadata: { labels: { app: mock-llm } }
+    spec:
+      containers:
+        - name: mock-llm
+          image: acg-mock-llm:latest
+          imagePullPolicy: IfNotPresent
+          ports: [{ containerPort: 8099 }]
+          env:
+            - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+            - { name: MOCK_LATENCY_MS, value: "150" }
+            - { name: MOCK_FAILURE_RATE, value: "0" }
+          readinessProbe:
+            httpGet: { path: /health, port: 8099 }
+            periodSeconds: 3
+          livenessProbe:
+            httpGet: { path: /health, port: 8099 }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }

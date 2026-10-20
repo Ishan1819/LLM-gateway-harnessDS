@@ -24,6 +24,26 @@ class CapDecision:
 ALLOWED = CapDecision(allowed=True)
 
 
+def _pending(user: User) -> dict[str, float]:
+    """Spend already reserved by gateways but not yet persisted by a usage-worker.
+
+    In stream mode the DB lags the truth by however long the queue is, so the
+    cap check must count in-flight spend too or concurrent requests could slip
+    past a cap. Zero when Redis isn't in use.
+    """
+    from app.config import settings
+    from app.distributed import events
+    from app.distributed.redis_client import get_redis
+
+    redis = get_redis()
+    if redis is None or not settings.stream_mode:
+        return {"user": 0.0, "team": 0.0, "org": 0.0}
+    try:
+        return events.pending_spend(redis, user_id=user.id, team_id=user.team_id, org_id=user.org_id)
+    except Exception:  # noqa: BLE001 - a Redis blip must not block requests
+        return {"user": 0.0, "team": 0.0, "org": 0.0}
+
+
 def check(db: Session, user: User) -> CapDecision:
     if not user.is_active:
         return CapDecision(
@@ -32,30 +52,37 @@ def check(db: Session, user: User) -> CapDecision:
             scope="inactive",
         )
 
+    pending = _pending(user)
     checks: list[tuple[str, float, float]] = []
 
     if user.daily_cap:
-        checks.append(("user_daily", usage_service.user_spend(db, user.id, "day"), user.daily_cap))
+        checks.append(
+            ("user_daily", usage_service.user_spend(db, user.id, "day") + pending["user"], user.daily_cap)
+        )
     if user.monthly_cap:
         checks.append(
-            ("user_monthly", usage_service.user_spend(db, user.id, "month"), user.monthly_cap)
+            ("user_monthly", usage_service.user_spend(db, user.id, "month") + pending["user"],
+             user.monthly_cap)
         )
 
     team: Team | None = user.team
     if team:
         if team.daily_cap:
             checks.append(
-                ("team_daily", usage_service.team_spend(db, team.id, "day"), team.daily_cap)
+                ("team_daily", usage_service.team_spend(db, team.id, "day") + pending["team"],
+                 team.daily_cap)
             )
         if team.monthly_cap:
             checks.append(
-                ("team_monthly", usage_service.team_spend(db, team.id, "month"), team.monthly_cap)
+                ("team_monthly", usage_service.team_spend(db, team.id, "month") + pending["team"],
+                 team.monthly_cap)
             )
 
     org = user.organization
     if org and org.monthly_budget:
         checks.append(
-            ("org_monthly", usage_service.org_spend(db, org.id, "month"), org.monthly_budget)
+            ("org_monthly", usage_service.org_spend(db, org.id, "month") + pending["org"],
+             org.monthly_budget)
         )
 
     for scope, spent, cap in checks:

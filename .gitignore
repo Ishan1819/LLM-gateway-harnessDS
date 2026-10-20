@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
+.pytest_cache/
 *.db
 *.sqlite3
 
@@ -20,4 +21,4 @@ dist/
 .DS_Store
 .idea/
 .vscode/
-frontend/package-lock.json
+.claude/

@@ -43,7 +43,7 @@ export default function CapEditor({ subject, kind, onSave, onCancel, saving }) {
             className="input num"
             type="number"
             min="0"
-            step="1"
+            step="0.01"
             value={monthly}
             onChange={(e) => setMonthly(e.target.value)}
           />
@@ -57,7 +57,7 @@ export default function CapEditor({ subject, kind, onSave, onCancel, saving }) {
             className="input num"
             type="number"
             min="0"
-            step="0.5"
+            step="0.01"
             value={daily}
             onChange={(e) => setDaily(e.target.value)}
           />

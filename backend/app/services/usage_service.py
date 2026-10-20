@@ -39,6 +39,23 @@ def record_usage(
     prompt_tokens: int,
     completion_tokens: int,
     request_summary: str | None = None,
+    # --- AI Cost Governance extensions (optional; only set by the governed
+    # proxy pipeline in routes/governed.py) ---
+    requested_model: str | None = None,
+    original_tokens: int | None = None,
+    compressed_tokens: int | None = None,
+    token_reduction_pct: float | None = None,
+    complexity_score: float | None = None,
+    complexity_tier: int | None = None,
+    compression_savings_usd: float | None = None,
+    routing_savings_usd: float | None = None,
+    total_savings_usd: float | None = None,
+    techniques_applied: list[str] | None = None,
+    # --- Distributed pipeline provenance (set by the usage-worker) ---
+    lamport_ts: int | None = None,
+    origin_pod: str | None = None,
+    processed_by: str | None = None,
+    event_id: str | None = None,
 ) -> UsageLog:
     cost = calculate_cost(model, prompt_tokens, completion_tokens)
     log = UsageLog(
@@ -51,6 +68,20 @@ def record_usage(
         total_tokens=prompt_tokens + completion_tokens,
         cost_usd=cost,
         request_summary=(request_summary or "")[:100] or None,
+        requested_model=requested_model,
+        original_tokens=original_tokens,
+        compressed_tokens=compressed_tokens,
+        token_reduction_pct=token_reduction_pct,
+        complexity_score=complexity_score,
+        complexity_tier=complexity_tier,
+        compression_savings_usd=compression_savings_usd,
+        routing_savings_usd=routing_savings_usd,
+        total_savings_usd=total_savings_usd,
+        techniques_applied=",".join(techniques_applied) if techniques_applied else None,
+        lamport_ts=lamport_ts,
+        origin_pod=origin_pod,
+        processed_by=processed_by,
+        event_id=event_id,
     )
     db.add(log)
     db.commit()
@@ -262,6 +293,74 @@ def breakdown_by_team(db: Session, org_id: int, period: str = "month") -> list[d
             }
         )
     return sorted(out, key=lambda r: r["spend"], reverse=True)
+
+
+def governance_summary(db: Session, org_id: int, period: str = "month") -> dict:
+    """Aggregate metrics for requests that went through the governed pipeline
+    (compression + complexity scoring + routing) -- see routes/governed.py.
+    Rows from the plain passthrough proxy have `original_tokens IS NULL` and
+    are excluded, since they were never compressed or re-routed.
+    """
+    since = period_start(period)
+    rows = (
+        db.execute(
+            select(UsageLog).where(
+                UsageLog.org_id == org_id,
+                UsageLog.timestamp >= since,
+                UsageLog.original_tokens.is_not(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    if not rows:
+        return {
+            "total_requests": 0,
+            "original_tokens": 0,
+            "compressed_tokens": 0,
+            "token_reduction_pct": 0.0,
+            "model_distribution": [],
+            "original_estimated_cost_usd": 0.0,
+            "optimized_cost_usd": 0.0,
+            "total_saved_usd": 0.0,
+            "total_saved_pct": 0.0,
+        }
+
+    original_tokens = sum(r.original_tokens or 0 for r in rows)
+    compressed_tokens = sum(r.compressed_tokens or 0 for r in rows)
+    total_saved = sum(r.total_savings_usd or 0.0 for r in rows)
+    optimized_cost = sum(r.cost_usd or 0.0 for r in rows)
+    # The counterfactual "as if governance were off" cost = what was actually
+    # spent plus what governance is estimated to have saved.
+    original_estimated_cost = optimized_cost + total_saved
+
+    model_counts: dict[str, int] = {}
+    for r in rows:
+        model_counts[r.model_used] = model_counts.get(r.model_used, 0) + 1
+    model_distribution = sorted(
+        ({"model": m, "requests": c} for m, c in model_counts.items()),
+        key=lambda x: x["requests"],
+        reverse=True,
+    )
+
+    return {
+        "total_requests": len(rows),
+        "original_tokens": original_tokens,
+        "compressed_tokens": compressed_tokens,
+        "token_reduction_pct": round(
+            100 * (original_tokens - compressed_tokens) / original_tokens, 2
+        )
+        if original_tokens
+        else 0.0,
+        "model_distribution": model_distribution,
+        "original_estimated_cost_usd": round(original_estimated_cost, 4),
+        "optimized_cost_usd": round(optimized_cost, 4),
+        "total_saved_usd": round(total_saved, 4),
+        "total_saved_pct": round(100 * total_saved / original_estimated_cost, 2)
+        if original_estimated_cost
+        else 0.0,
+    }
 
 
 def breakdown_by_model(db: Session, org_id: int, period: str = "month") -> list[dict]:

@@ -1,0 +1,27 @@
+# usage-worker: consumer group on the usage stream; replicas share the work
+# and take over each other's unacknowledged events if one dies.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: usage-worker
+  namespace: acg
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: usage-worker } }
+  template:
+    metadata: { labels: { app: usage-worker } }
+    spec:
+      terminationGracePeriodSeconds: 15
+      containers:
+        - name: usage-worker
+          image: acg-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "app.workers.usage_worker"]
+          envFrom:
+            - configMapRef: { name: acg-config }
+            - secretRef: { name: acg-secrets }
+          env:
+            - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 256Mi }

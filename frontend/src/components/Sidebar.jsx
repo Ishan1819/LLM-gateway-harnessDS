@@ -10,6 +10,9 @@ const NAV = [
   { to: '/alerts', label: 'Alerts', glyph: '△' },
   { to: '/savings', label: 'Savings report', glyph: '◑' },
   { to: '/optimizer', label: 'Cost Optimizer', glyph: '◆' },
+  { to: '/governance', label: 'AI Governance', glyph: '◉' },
+  { to: '/cluster', label: 'Cluster', glyph: '⬡' },
+  { to: '/simulator', label: 'Employee simulator', glyph: '▶' },
   { to: '/plan', label: 'Plans & pricing', glyph: '◇' },
   { to: '/settings', label: 'Settings', glyph: '⚙' },
 ]

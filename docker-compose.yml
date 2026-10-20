@@ -1,0 +1,80 @@
+# Local multi-container run of the whole distributed system (before Kubernetes).
+#
+#   docker compose up --build        -> http://localhost:8080  (admin@test.com / demo123)
+#   docker compose up --scale usage-worker=3
+#   docker compose down -v           (also wipes the database volume)
+#
+# Secrets come from backend/.env; service host names below override the
+# localhost values in that file.
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql://acg:${POSTGRES_PASSWORD:-acg-demo-password}@postgres:5432/ai_cost_governor
+  REDIS_URL: redis://redis:6379/0
+  USAGE_MODE: stream
+  OPENAI_BASE_URL: http://mock-llm:8099/v1
+  ANTHROPIC_BASE_URL: http://mock-llm:8099/v1
+  GATEWAY_INTERNAL_URL: http://gateway:8000
+  POD_NAME: ""
+
+x-backend: &backend
+  build: ./backend
+  image: acg-backend:latest
+  env_file: ./backend/.env
+  environment: *backend-env
+  restart: unless-stopped
+  depends_on:
+    postgres: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    env_file: ./backend/.env
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]  # stream survives a restart
+
+  mock-llm:
+    build: ./services/mock-llm
+    image: acg-mock-llm:latest
+    environment:
+      MOCK_LATENCY_MS: "150"
+    deploy: { replicas: 2 }
+
+  seed:
+    <<: *backend
+    command: ["python", "seed_data.py", "--keep"]
+    restart: "no"
+
+  gateway:
+    <<: *backend
+    deploy: { replicas: 2 }
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_started }
+      seed: { condition: service_completed_successfully }
+
+  usage-worker:
+    <<: *backend
+    command: ["python", "-m", "app.workers.usage_worker"]
+    deploy: { replicas: 2 }
+
+  alert-worker:
+    <<: *backend
+    command: ["python", "-m", "app.workers.alert_worker"]
+    deploy: { replicas: 2 }
+
+  frontend:
+    build: ./frontend
+    image: acg-frontend:latest
+    ports: ["8080:80"]
+    depends_on: [gateway]
+
+volumes:
+  pgdata:

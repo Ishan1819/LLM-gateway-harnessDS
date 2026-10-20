@@ -6,6 +6,7 @@ untouched, so a developer only has to change `base_url` in their SDK setup.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from dataclasses import dataclass
 
@@ -46,7 +47,10 @@ def resolve_api_key(org: Organization, provider: str) -> str:
             f"No {provider} API key configured for this organization. "
             "An admin can add one under Settings."
         )
-    return decrypt(encrypted)
+    try:
+        return decrypt(encrypted)
+    except ValueError as exc:
+        raise UpstreamKeyMissing(str(exc)) from exc
 
 
 def build_target(provider: str, path: str, api_key: str) -> tuple[str, dict[str, str]]:
@@ -146,13 +150,38 @@ async def forward(
     payload: dict,
     api_key: str,
     extra_headers: dict[str, str],
-) -> tuple[int, dict, Usage]:
-    """Non-streaming forward. Returns (status, body, usage)."""
+) -> tuple[int, dict, Usage, str | None]:
+    """Non-streaming forward (an RPC to the provider service).
+
+    Returns (status, body, usage, upstream_pod). Connection errors and 5xx
+    responses are retried with exponential backoff -- each retry is a fresh
+    connection, so the Service can route it to a different, healthy replica.
+    """
     url, headers = build_target(provider, path, api_key)
     headers.update(extra_headers)
 
-    async with _client() as client:
-        response = await client.post(url, json=payload, headers=headers)
+    attempts = 1 + max(0, settings.UPSTREAM_RETRIES)
+    response = None
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            async with _client() as client:
+                response = await client.post(url, json=payload, headers=headers)
+            if response.status_code < 500:
+                break
+        except httpx.TransportError as exc:
+            last_error = exc
+            response = None
+        if attempt < attempts - 1:
+            await asyncio.sleep(0.2 * (2**attempt))
+
+    if response is None:
+        return (
+            502,
+            {"error": {"message": f"Upstream unreachable: {last_error}", "type": "upstream_error"}},
+            Usage(),
+            None,
+        )
 
     try:
         body = response.json()
@@ -160,7 +189,7 @@ async def forward(
         body = {"error": {"message": response.text, "type": "upstream_error"}}
 
     usage = extract_usage(provider, body) if response.is_success else Usage()
-    return response.status_code, body, usage
+    return response.status_code, body, usage, response.headers.get("x-served-by")
 
 
 def stream_forward(

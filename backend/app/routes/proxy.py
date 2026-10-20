@@ -1,29 +1,46 @@
-"""OpenAI- and Anthropic-compatible proxy endpoints.
+"""OpenAI- and Anthropic-compatible proxy endpoints (the gateway's data plane).
 
 A developer changes nothing but `base_url`:
 
     OpenAI(base_url="https://<host>/v1/org/demo", api_key="<proxy key>")
     Anthropic(base_url="https://<host>/v1/org/demo", api_key="<proxy key>")
+
+Per request, across however many gateway pods are running:
+
+    authenticate -> rate limit -> [ per-user distributed lock:
+        cap check (DB spend + pending spend) -> RPC to provider -> account usage ]
+
+Response headers name the gateway pod and the provider pod that served the
+call, plus the Lamport timestamp of the usage event, so load balancing and
+event ordering are visible from the admin dashboard.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import SessionLocal, get_db
+from app.distributed.lock import DistributedLock
+from app.distributed.redis_client import get_async_redis
 from app.middleware.rate_limiter import check_rate_limit
 from app.models import Organization, User
-from app.services import alert_service, cap_service, proxy_service, usage_service
+from app.services import alert_service, cap_service, proxy_service
+from app.services.accounting import account_usage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/org/{org_slug}", tags=["proxy"])
+
+# Requests served by this pod, reported in its heartbeat.
+served = {"requests": 0}
 
 
 def _extract_proxy_key(authorization: str | None, x_api_key: str | None) -> str:
@@ -75,7 +92,7 @@ def authenticate(
     return org, user
 
 
-def _enforce(db: Session, user: User) -> None:
+def rate_limit(user: User) -> None:
     allowed, _remaining = check_rate_limit(user.proxy_api_key)
     if not allowed:
         raise HTTPException(
@@ -84,37 +101,93 @@ def _enforce(db: Session, user: User) -> None:
                               "type": "rate_limit_error"}},
         )
 
-    decision = cap_service.check(db, user)
+
+def release_connection(db: Session, *objects) -> None:
+    """Detach the loaded rows and hand the DB connection back to the pool.
+
+    Proxy handlers are async and spend most of their life awaiting (the lock,
+    the upstream RPC). If the request session kept its connection across those
+    awaits, a burst larger than the pool would block the event loop on
+    checkout while the connection holders can't resume -- a deadlock. So the
+    session is released before any await, and the cap check uses its own
+    short-lived session.
+    """
+    for obj in objects:
+        db.expunge(obj)
+    db.close()
+
+
+def check_caps(user_id: int) -> None:
+    """Cap check on a fresh, short-lived session (no await while it is open)."""
+    db = SessionLocal()
+    try:
+        user = db.get(User, user_id)
+        decision = cap_service.check(db, user)
+        if not decision.allowed:
+            alert_service.record_limit_reached(db, user, decision.scope or "unknown")
+    finally:
+        db.close()
     if not decision.allowed:
-        alert_service.record_limit_reached(db, user, decision.scope or "unknown")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={"error": {"message": decision.reason, "type": "budget_exceeded"}},
         )
 
 
-def _record(user_id: int, model: str, usage: proxy_service.Usage, preview: str) -> None:
-    """Write the usage row on its own session so it survives a streamed response."""
-    if usage.total <= 0:
+def _enforce(db: Session, user: User) -> None:
+    """Rate limit + cap check (kept for callers outside a critical section)."""
+    rate_limit(user)
+    check_caps(user.id)
+
+
+@asynccontextmanager
+async def user_critical_section(user_id: int):
+    """Mutual exclusion per employee across all gateway pods.
+
+    Without Redis (single process) there is nothing to coordinate with, so this
+    is a no-op. If Redis is unreachable we degrade to no lock rather than
+    failing the request.
+    """
+    redis = get_async_redis()
+    if redis is None:
+        yield None
         return
-    db = SessionLocal()
+
+    lock = DistributedLock(
+        redis, f"user:{user_id}", ttl_ms=settings.LOCK_TTL_MS, wait_ms=settings.LOCK_WAIT_MS
+    )
     try:
-        user = db.execute(select(User).where(User.id == user_id)).scalar_one_or_none()
-        if user is None:
-            return
-        usage_service.record_usage(
-            db,
-            user=user,
-            model=model,
-            prompt_tokens=usage.prompt_tokens,
-            completion_tokens=usage.completion_tokens,
-            request_summary=preview,
+        acquired = await lock.acquire()
+    except Exception:  # noqa: BLE001
+        logger.warning("Lock service unavailable; continuing without mutual exclusion")
+        yield None
+        return
+
+    if not acquired:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"error": {"message": "Too many concurrent requests for this account; retry.",
+                              "type": "lock_timeout"}},
         )
-        alert_service.evaluate_thresholds(db, user)
-    except Exception:  # noqa: BLE001 - accounting must never break the response
-        logger.exception("Failed to record usage for user %s", user_id)
+    try:
+        yield lock
     finally:
-        db.close()
+        try:
+            await lock.release()
+        except Exception:  # noqa: BLE001 - TTL frees it anyway
+            logger.warning("Lock release failed for %s", lock.key)
+
+
+def distributed_headers(upstream_pod: str | None, accounting: dict, lock) -> dict[str, str]:
+    headers = {"x-acg-gateway-pod": settings.pod_name}
+    if upstream_pod:
+        headers["x-acg-upstream-pod"] = upstream_pod
+    if accounting.get("lamport_ts") is not None:
+        headers["x-acg-lamport"] = str(accounting["lamport_ts"])
+    headers["x-acg-usage-mode"] = accounting.get("mode", "skipped")
+    if lock is not None:
+        headers["x-acg-lock-wait-ms"] = f"{lock.waited_ms:.1f}"
+    return headers
 
 
 async def _handle(
@@ -128,7 +201,9 @@ async def _handle(
     force_provider: str | None = None,
 ):
     org, user = authenticate(org_slug, db, authorization, x_api_key)
-    _enforce(db, user)
+    release_connection(db, org, user)
+    rate_limit(user)
+    served["requests"] += 1
 
     try:
         payload = await request.json()
@@ -152,29 +227,44 @@ async def _handle(
 
     extra_headers = proxy_service.passthrough_headers(dict(request.headers), provider)
     preview = proxy_service.prompt_preview(payload)
-    user_id = user.id
 
     if payload.get("stream"):
+        # A stream can last minutes, so the lock covers only the cap check.
+        async with user_critical_section(user.id):
+            check_caps(user.id)
         return await _handle_stream(
             provider=provider,
             path=upstream_path,
             payload=payload,
             api_key=api_key,
             extra_headers=extra_headers,
-            user_id=user_id,
+            user=user,
             model=model,
             preview=preview,
         )
 
-    status_code, body, usage = await proxy_service.forward(
-        provider=provider,
-        path=upstream_path,
-        payload=payload,
-        api_key=api_key,
-        extra_headers=extra_headers,
+    async with user_critical_section(user.id) as lock:
+        check_caps(user.id)
+        status_code, body, usage, upstream_pod = await proxy_service.forward(
+            provider=provider,
+            path=upstream_path,
+            payload=payload,
+            api_key=api_key,
+            extra_headers=extra_headers,
+        )
+        accounting = account_usage(
+            user=user,
+            model=model,
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            preview=preview,
+        )
+
+    return JSONResponse(
+        status_code=status_code,
+        content=body,
+        headers=distributed_headers(upstream_pod, accounting, lock),
     )
-    _record(user_id, model, usage, preview)
-    return JSONResponse(status_code=status_code, content=body)
 
 
 async def _handle_stream(
@@ -184,7 +274,7 @@ async def _handle_stream(
     payload: dict,
     api_key: str,
     extra_headers: dict[str, str],
-    user_id: int,
+    user: User,
     model: str,
     preview: str,
 ):
@@ -213,12 +303,22 @@ async def _handle_stream(
                     yield f"{line}\n"
         finally:
             await client.aclose()
-            _record(user_id, model, usage, preview)
+            account_usage(
+                user=user,
+                model=model,
+                prompt_tokens=usage.prompt_tokens,
+                completion_tokens=usage.completion_tokens,
+                preview=preview,
+            )
 
     return StreamingResponse(
         event_stream(),
         media_type="text/event-stream",
-        headers={"cache-control": "no-cache", "x-accel-buffering": "no"},
+        headers={
+            "cache-control": "no-cache",
+            "x-accel-buffering": "no",
+            "x-acg-gateway-pod": settings.pod_name,
+        },
     )
 
 

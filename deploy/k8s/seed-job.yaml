@@ -1,0 +1,21 @@
+# One-shot Job: create tables and the demo org (only if it is missing).
+# Applied separately by scripts/deploy.ps1 after Postgres is ready.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: seed-demo
+  namespace: acg
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: acg-backend:latest
+          imagePullPolicy: IfNotPresent
+          command: ["python", "seed_data.py", "--keep"]
+          envFrom:
+            - configMapRef: { name: acg-config }
+            - secretRef: { name: acg-secrets }

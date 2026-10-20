@@ -55,6 +55,20 @@ def _add_missing_columns() -> None:
     # (table, column, DDL type + default)
     additions = [
         ("organizations", "plan", "VARCHAR(20) DEFAULT 'free' NOT NULL"),
+        ("usage_logs", "requested_model", "VARCHAR(120)"),
+        ("usage_logs", "original_tokens", "INTEGER"),
+        ("usage_logs", "compressed_tokens", "INTEGER"),
+        ("usage_logs", "token_reduction_pct", "FLOAT"),
+        ("usage_logs", "complexity_score", "FLOAT"),
+        ("usage_logs", "complexity_tier", "INTEGER"),
+        ("usage_logs", "compression_savings_usd", "FLOAT"),
+        ("usage_logs", "routing_savings_usd", "FLOAT"),
+        ("usage_logs", "total_savings_usd", "FLOAT"),
+        ("usage_logs", "techniques_applied", "VARCHAR(200)"),
+        ("usage_logs", "lamport_ts", "INTEGER"),
+        ("usage_logs", "origin_pod", "VARCHAR(120)"),
+        ("usage_logs", "processed_by", "VARCHAR(120)"),
+        ("usage_logs", "event_id", "VARCHAR(40)"),
     ]
 
     inspector = inspect(engine)
@@ -69,10 +83,38 @@ def _add_missing_columns() -> None:
                 continue
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
 
+        # Composite indexes for cap checks, for databases created before them.
+        if "usage_logs" in existing_tables:
+            for name, cols in (
+                ("ix_usage_user_ts", "user_id, timestamp"),
+                ("ix_usage_team_ts", "team_id, timestamp"),
+                ("ix_usage_org_ts", "org_id, timestamp"),
+                ("ix_usage_logs_event_id", "event_id"),
+            ):
+                conn.execute(text(f"CREATE INDEX IF NOT EXISTS {name} ON usage_logs ({cols})"))
 
-def init_db() -> None:
-    """Create tables for any model registered on Base, then patch new columns."""
+
+def init_db(attempts: int = 15, delay_s: float = 2.0) -> None:
+    """Create tables for any model registered on Base, then patch new columns.
+
+    Retried because in a cluster the database may not be accepting connections
+    yet when a pod starts, and several replicas starting together can race on
+    CREATE TABLE -- the loser simply retries and finds the tables present.
+    """
+    import logging
+    import time
+
     from app import models  # noqa: F401  (registers all mappers)
 
-    Base.metadata.create_all(bind=engine)
-    _add_missing_columns()
+    for attempt in range(1, attempts + 1):
+        try:
+            Base.metadata.create_all(bind=engine)
+            _add_missing_columns()
+            return
+        except Exception as exc:  # noqa: BLE001
+            if attempt == attempts:
+                raise
+            logging.getLogger(__name__).warning(
+                "database not ready (attempt %d/%d): %s", attempt, attempts, exc
+            )
+            time.sleep(delay_s)

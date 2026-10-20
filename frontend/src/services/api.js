@@ -1,4 +1,6 @@
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+// Empty string = same origin (the Docker/Kubernetes build, where nginx proxies
+// /api and /v1 to the gateway). Unset = local dev against uvicorn on :8000.
+const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000').replace(/\/$/, '')
 
 const TOKEN_KEY = 'acg_token'
 
@@ -106,4 +108,43 @@ export const api = {
   getKeys: () => request('/api/admin/settings/keys'),
   updateKeys: (payload) => request('/api/admin/settings/keys', { method: 'PUT', body: payload }),
   pricing: () => request('/api/admin/settings/pricing'),
+
+  // --- distributed cluster (status + employee simulator) ---
+  clusterStatus: () => request('/api/admin/cluster/status'),
+  resetClusterStats: () => request('/api/admin/cluster/reset-stats', { method: 'POST' }),
+  stopNode: (pod) => request(`/api/admin/cluster/nodes/${encodeURIComponent(pod)}/stop`, { method: 'POST' }),
+  simulate: (payload) => request('/api/admin/cluster/simulate', { method: 'POST', body: payload }),
+
+  // --- governance (compression + model routing) ---
+  governance: (period = 'month') => request(`/api/admin/governance?period=${period}`),
+
+  // Not routed through the shared `request()` helper: this call authenticates
+  // with a per-user *proxy* key (not the admin JWT) and the caller needs the
+  // response *headers* (x-governance-*), which `request()` discards after
+  // parsing the JSON body.
+  tryGoverned: async (orgSlug, proxyKey, payload) => {
+    const response = await fetch(`${BASE_URL}/v1/org/${orgSlug}/governed/chat/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${proxyKey}` },
+      body: JSON.stringify(payload),
+    })
+
+    const body = await response.json().catch(() => null)
+
+    if (!response.ok) {
+      const detail = body?.detail
+      const message =
+        typeof detail === 'string'
+          ? detail
+          : detail?.message || detail?.error?.message || `Request failed (${response.status})`
+      throw new ApiError(message, response.status)
+    }
+
+    const headers = {}
+    response.headers.forEach((value, key) => {
+      if (key.startsWith('x-governance-')) headers[key] = value
+    })
+
+    return { body, headers }
+  },
 }

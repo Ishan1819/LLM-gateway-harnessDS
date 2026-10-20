@@ -326,6 +326,19 @@ def optimizer(
     return optimizer_service.build_report(db, admin.org_id, since)
 
 
+@router.get("/governance")
+def governance(
+    period: str = Query("month", pattern="^(day|week|month)$"),
+    admin: AdminUser = Depends(get_current_admin),
+    db: Session = Depends(get_db),
+):
+    """Metrics for requests that went through the governed pipeline: real
+    measured token compression plus model-routing savings, distinct from the
+    plain byte-faithful proxy's cost tracking above.
+    """
+    return usage_service.governance_summary(db, admin.org_id, period)
+
+
 @router.get("/plan")
 def current_plan(
     admin: AdminUser = Depends(get_current_admin), db: Session = Depends(get_db)

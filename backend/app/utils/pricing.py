@@ -57,9 +57,11 @@ def get_rate(model: str) -> tuple[float, float]:
     if model in table:
         return table[model]
     # Tolerate dated snapshots and suffixed variants (e.g. gpt-4o-2024-11-20).
-    for known, rate in table.items():
+    # Longest prefix wins, so gpt-4o-mini-2024-07-18 is priced as gpt-4o-mini
+    # rather than gpt-4o.
+    for known in sorted(table, key=len, reverse=True):
         if model.startswith(known):
-            return rate
+            return table[known]
     return FALLBACK_PRICE
 
 

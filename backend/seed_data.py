@@ -25,6 +25,7 @@ from app.database import SessionLocal, init_db
 from app.models import Alert, AlertType, Organization, Team, UsageLog, User
 from app.models.user import AdminUser, generate_proxy_api_key
 from app.services.auth_service import hash_password
+from app.services.encryption_service import encrypt
 from app.services.usage_service import month_start
 from app.utils import plans
 from app.utils.pricing import calculate_cost
@@ -175,11 +176,15 @@ def seed() -> None:
     try:
         # The demo org runs on Premium so every tier's features are visible in
         # the showcase. Self-serve signups start on Free and see the gates.
+        # Placeholder provider keys: requests go to the mock-llm service, which
+        # ignores them, so the demo runs end to end without paying anyone.
         org = Organization(
             name="Demo Organization",
             slug=ORG_SLUG,
             monthly_budget=0.0,
             plan=plans.PREMIUM,
+            openai_api_key_encrypted=encrypt("sk-demo-openai-not-a-real-key"),
+            anthropic_api_key_encrypted=encrypt("sk-ant-demo-not-a-real-key"),
         )
         db.add(org)
         db.flush()

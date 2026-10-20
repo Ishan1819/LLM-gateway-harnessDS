@@ -8,7 +8,10 @@ import { api, auth } from './services/api'
 
 import Alerts from './pages/Alerts'
 import Caps from './pages/Caps'
+import Cluster from './pages/Cluster'
+import EmployeeSimulator from './pages/EmployeeSimulator'
 import Dashboard from './pages/Dashboard'
+import Governance from './pages/Governance'
 import Login from './pages/Login'
 import Optimizer from './pages/Optimizer'
 import Plan from './pages/Plan'
@@ -97,6 +100,9 @@ export default function App() {
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/savings" element={<Savings />} />
               <Route path="/optimizer" element={<Optimizer />} />
+              <Route path="/governance" element={<Governance />} />
+              <Route path="/cluster" element={<Cluster />} />
+              <Route path="/simulator" element={<EmployeeSimulator />} />
               <Route path="/plan" element={<Plan />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/login" element={<Navigate to="/" replace />} />

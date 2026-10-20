@@ -38,8 +38,42 @@ class Settings(BaseSettings):
     ANTHROPIC_VERSION: str = "2023-06-01"
     UPSTREAM_TIMEOUT_SECONDS: float = 600.0
 
+    UPSTREAM_RETRIES: int = 2  # extra attempts on connect errors / 5xx
+
     # --- Governance ---
     ALERT_THRESHOLDS: str = "0.8,0.9"
+
+    # --- Distributed runtime ---
+    # Identity of this process in the cluster. Kubernetes injects the pod name
+    # through the downward API; locally it falls back to the hostname.
+    POD_NAME: str = ""
+    # "sync" writes usage straight to the DB (single process, tests).
+    # "stream" publishes a usage event to Redis for usage-workers to persist.
+    USAGE_MODE: str = "sync"
+    RATE_LIMIT_PER_MIN: int = 600  # per proxy key, enforced cluster-wide
+    USAGE_STREAM: str = "acg:usage-events"
+    USAGE_GROUP: str = "usage-workers"
+    # Distributed lock around cap check -> forward -> pending-spend update.
+    LOCK_TTL_MS: int = 30_000
+    LOCK_WAIT_MS: int = 15_000
+    # Alert-worker leader lease.
+    LEADER_TTL_MS: int = 6_000
+    ALERT_SCAN_INTERVAL_S: float = 10.0
+    # Cluster membership heartbeats.
+    HEARTBEAT_TTL_S: int = 10
+    # Where the admin Employee Simulator sends traffic so it is load-balanced
+    # across gateway pods (a Kubernetes Service name in the cluster).
+    GATEWAY_INTERNAL_URL: str = "http://127.0.0.1:8000"
+
+    @property
+    def pod_name(self) -> str:
+        import socket
+
+        return self.POD_NAME or socket.gethostname()
+
+    @property
+    def stream_mode(self) -> bool:
+        return self.USAGE_MODE.lower() == "stream" and bool(self.REDIS_URL)
 
     @property
     def cors_origin_list(self) -> list[str]:
